@@ -1,4 +1,48 @@
-# 2.1.1 (develop)
+# 2.2.0 (develop)
+
+### Features
+
+* Fake Call function
+* Added unreadMessages to chats
+
+### Fixed
+
+* Fixed prefilledVariables in startTypebot
+* Fix duplicate file upload
+
+# 2.1.2 (2024-10-06 10:09)
+
+### Features
+
+* Sync lost messages on chatwoot
+* Set the maximum number of listeners that can be registered for events
+* Now is possible send medias with form-data
+
+### Fixed
+
+* Fetch status message
+* Adjusts in migrations
+* Update pushName in chatwoot
+* Validate message before sending chatwoot
+* Adds the message status to the return of the "prepareMessage" function
+* Fixed openai setting when send a message with chatwoot
+* Fix buildkey function in hSet and hDelete
+* Fix mexico number
+* Update baileys version
+* Update in Baileys version that fixes timeout when updating profile picture
+* Adjusts for fix timeout error on send status message
+* Chatwoot verbose logs
+* Adjusts on prisma connections
+* License terms updated
+* Fixed send message to group without no cache (local or redis)
+* Fixed startTypebot with startSession = true
+* Fixed issue of always creating a new label when saving chatwoot
+* Fixed getBase64FromMediaMessage with convertToMp4
+* Fixed bug when send message when don't have mentionsEveryOne on payload
+* Does not search message without chatwoot Message Id for reply
+* Fixed bot fallback not working on integrations
+
+# 2.1.1 (2024-09-22 10:31)
 
 ### Features
 
@@ -6,6 +50,8 @@
 * Save is on whatsapp on the database
 * Add headers to the instance's webhook registration
 * Debounce message break is now "\n" instead of white space
+* Single view messages are now supported in chatwoot
+* Chatbots can now send any type of media
 
 ### Fixed
 
@@ -18,6 +64,12 @@
 * Fixed chatwoot screen
 * It is now possible to send images via the Evolution Channel
 * Removed "version" from docker-compose as it is obsolete (https://dev.to/ajeetraina/do-we-still-use-version-in-compose-3inp)
+* Fixed typebot ignoreJids being used only from default settings
+* Fixed Chatwoot inbox creation on save
+* Changed axios timeout for manager requests for 30s
+* Update in Baileys version that fixes timeout when updating profile picture
+* Fixed issue when sending links in markdown by chatbots like Dify
+* Fixed issue with chatbots not respecting settings
 
 # 2.1.0 (2024-08-26 15:33)
 

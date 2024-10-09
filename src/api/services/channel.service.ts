@@ -294,7 +294,7 @@ export class ChannelStartupService {
     this.clearCacheChatwoot();
   }
 
-  public async findChatwoot(): Promise<ChatwootDto> {
+  public async findChatwoot(): Promise<ChatwootDto | null> {
     if (!this.configService.get<Chatwoot>('CHATWOOT').ENABLED) {
       return null;
     }
@@ -600,7 +600,7 @@ export class ChannelStartupService {
       where: {
         instanceId: this.instanceId,
         remoteJid: query.where?.remoteJid,
-        messageId: query.where?.id,
+        keyId: query.where?.id,
       },
       skip: query.offset * (query?.page === 1 ? 0 : (query?.page as number) - 1),
       take: query.offset,
@@ -614,9 +614,7 @@ export class ChannelStartupService {
         : this.createJid(query.where?.remoteJid)
       : null;
 
-    let result;
-    if (remoteJid) {
-      result = await this.prismaRepository.$queryRaw`
+    const result = await this.prismaRepository.$queryRaw`
             SELECT
                 "Chat"."id",
                 "Chat"."remoteJid",
@@ -625,12 +623,13 @@ export class ChannelStartupService {
                 "Chat"."createdAt",
                 "Chat"."updatedAt",
                 "Contact"."pushName",
-                "Contact"."profilePicUrl"
+                "Contact"."profilePicUrl",
+                "Contact"."unreadMessages"
             FROM "Chat"
             INNER JOIN "Message" ON "Chat"."remoteJid" = "Message"."key"->>'remoteJid'
             LEFT JOIN "Contact" ON "Chat"."remoteJid" = "Contact"."remoteJid"
             WHERE "Chat"."instanceId" = ${this.instanceId}
-            AND "Chat"."remoteJid" = ${remoteJid}
+            ${remoteJid ? 'AND "Chat"."remoteJid" = ${remoteJid}' : ''}
             GROUP BY
                 "Chat"."id",
                 "Chat"."remoteJid",
@@ -639,36 +638,10 @@ export class ChannelStartupService {
                 "Chat"."createdAt",
                 "Chat"."updatedAt",
                 "Contact"."pushName",
-                "Contact"."profilePicUrl"
+                "Contact"."profilePicUrl",
+                "Contact"."unreadMessages"
             ORDER BY "Chat"."updatedAt" DESC;
         `;
-    } else {
-      result = await this.prismaRepository.$queryRaw`
-            SELECT
-                "Chat"."id",
-                "Chat"."remoteJid",
-                "Chat"."name",
-                "Chat"."labels",
-                "Chat"."createdAt",
-                "Chat"."updatedAt",
-                "Contact"."pushName",
-                "Contact"."profilePicUrl"
-            FROM "Chat"
-            INNER JOIN "Message" ON "Chat"."remoteJid" = "Message"."key"->>'remoteJid'
-            LEFT JOIN "Contact" ON "Chat"."remoteJid" = "Contact"."remoteJid"
-            WHERE "Chat"."instanceId" = ${this.instanceId}
-            GROUP BY
-                "Chat"."id",
-                "Chat"."remoteJid",
-                "Chat"."name",
-                "Chat"."labels",
-                "Chat"."createdAt",
-                "Chat"."updatedAt",
-                "Contact"."pushName",
-                "Contact"."profilePicUrl"
-            ORDER BY "Chat"."updatedAt" DESC;
-        `;
-    }
 
     return result;
   }

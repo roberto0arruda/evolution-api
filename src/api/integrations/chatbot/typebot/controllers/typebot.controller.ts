@@ -5,7 +5,7 @@ import { TypebotService } from '@api/integrations/chatbot/typebot/services/typeb
 import { PrismaRepository } from '@api/repository/repository.service';
 import { WAMonitoringService } from '@api/services/monitor.service';
 import { Events } from '@api/types/wa.types';
-import { Auth, configService, HttpServer, Typebot } from '@config/env.config';
+import { configService, Typebot } from '@config/env.config';
 import { Logger } from '@config/logger.config';
 import { BadRequestException } from '@exceptions';
 import { Typebot as TypebotModel } from '@prisma/client';
@@ -609,13 +609,7 @@ export class TypebotController extends ChatbotController implements ChatbotContr
       }
     }
 
-    const prefilledVariables = {
-      remoteJid: remoteJid,
-      instanceName: instance.instanceName,
-      serverUrl: configService.get<HttpServer>('SERVER').URL,
-      apiKey: configService.get<Auth>('AUTHENTICATION').API_KEY.KEY,
-      ownerJid: instanceData.number,
-    };
+    const prefilledVariables: any = {};
 
     if (variables?.length) {
       variables.forEach((variable: { name: string | number; value: string }) => {
@@ -633,30 +627,19 @@ export class TypebotController extends ChatbotController implements ChatbotContr
       });
 
       if (!findBot) {
-        findBot = await this.botRepository.upsert({
-          where: {
-            url_typebot_instanceId: {
-              url: url,
-              typebot: typebot,
-              instanceId: instanceData.id,
-            },
-          },
-          update: {
-            enabled: true,
-          },
-          create: {
+        findBot = await this.botRepository.create({
+          data: {
             enabled: true,
             url: url,
             typebot: typebot,
+            instanceId: instanceData.id,
             expire: expire,
-            triggerType: 'none',
             keywordFinish: keywordFinish,
             delayMessage: delayMessage,
             unknownMessage: unknownMessage,
             listeningFromMe: listeningFromMe,
             stopBotFromMe: stopBotFromMe,
             keepOpen: keepOpen,
-            instanceId: instanceData.id,
           },
         });
       }
@@ -669,51 +652,70 @@ export class TypebotController extends ChatbotController implements ChatbotContr
         },
       });
 
-      const response = await this.typebotService.createNewSession(instanceData, {
-        enabled: true,
-        url: url,
-        typebot: typebot,
-        remoteJid: remoteJid,
-        expire: expire,
-        keywordFinish: keywordFinish,
-        delayMessage: delayMessage,
-        unknownMessage: unknownMessage,
-        listeningFromMe: listeningFromMe,
-        stopBotFromMe: stopBotFromMe,
-        keepOpen: keepOpen,
-        prefilledVariables: prefilledVariables,
-        typebotId: findBot.id,
-      });
+      await this.typebotService.processTypebot(
+        instanceData,
+        remoteJid,
+        null,
+        null,
+        findBot,
+        url,
+        expire,
+        typebot,
+        keywordFinish,
+        delayMessage,
+        unknownMessage,
+        listeningFromMe,
+        stopBotFromMe,
+        keepOpen,
+        'init',
+        prefilledVariables,
+      );
 
-      if (response.sessionId) {
-        await this.typebotService.sendWAMessage(
-          instanceData,
-          response.session,
-          {
-            expire: expire,
-            keywordFinish: keywordFinish,
-            delayMessage: delayMessage,
-            unknownMessage: unknownMessage,
-            listeningFromMe: listeningFromMe,
-            stopBotFromMe: stopBotFromMe,
-            keepOpen: keepOpen,
-          },
-          remoteJid,
-          response.messages,
-          response.input,
-          response.clientSideActions,
-        );
+      // const response = await this.typebotService.createNewSession(instanceData, {
+      //   enabled: true,
+      //   url: url,
+      //   typebot: typebot,
+      //   remoteJid: remoteJid,
+      //   expire: expire,
+      //   keywordFinish: keywordFinish,
+      //   delayMessage: delayMessage,
+      //   unknownMessage: unknownMessage,
+      //   listeningFromMe: listeningFromMe,
+      //   stopBotFromMe: stopBotFromMe,
+      //   keepOpen: keepOpen,
+      //   prefilledVariables: prefilledVariables,
+      //   typebotId: findBot.id,
+      // });
 
-        this.waMonitor.waInstances[instance.instanceName].sendDataWebhook(Events.TYPEBOT_START, {
-          remoteJid: remoteJid,
-          url: url,
-          typebot: typebot,
-          prefilledVariables: prefilledVariables,
-          sessionId: `${response.sessionId}`,
-        });
-      } else {
-        throw new Error('Session ID not found in response');
-      }
+      // if (response.session) {
+      //   await this.typebotService.sendWAMessage(
+      //     instanceData,
+      //     response.session,
+      //     {
+      //       expire: expire,
+      //       keywordFinish: keywordFinish,
+      //       delayMessage: delayMessage,
+      //       unknownMessage: unknownMessage,
+      //       listeningFromMe: listeningFromMe,
+      //       stopBotFromMe: stopBotFromMe,
+      //       keepOpen: keepOpen,
+      //     },
+      //     remoteJid,
+      //     response.messages,
+      //     response.input,
+      //     response.clientSideActions,
+      //   );
+
+      //   this.waMonitor.waInstances[instance.instanceName].sendDataWebhook(Events.TYPEBOT_START, {
+      //     remoteJid: remoteJid,
+      //     url: url,
+      //     typebot: typebot,
+      //     prefilledVariables: prefilledVariables,
+      //     sessionId: `${response.sessionId}`,
+      //   });
+      // } else {
+      //   throw new Error('Session ID not found in response');
+      // }
     } else {
       const id = Math.floor(Math.random() * 10000000000).toString();
 
@@ -974,19 +976,11 @@ export class TypebotController extends ChatbotController implements ChatbotContr
 
       if (!instanceData) throw new Error('Instance not found');
 
-      const settings = await this.prismaRepository.typebotSetting.findFirst({
-        where: {
-          instanceId: instance.instanceId,
-        },
-      });
-
-      if (this.checkIgnoreJids(settings?.ignoreJids, remoteJid)) return;
-
       const session = await this.getSession(remoteJid, instance);
 
       const content = getConversationMessage(msg);
 
-      const findBot = (await this.findBotTrigger(
+      let findBot = (await this.findBotTrigger(
         this.botRepository,
         this.settingsRepository,
         content,
@@ -994,7 +988,31 @@ export class TypebotController extends ChatbotController implements ChatbotContr
         session,
       )) as TypebotModel;
 
-      if (!findBot) return;
+      if (!findBot) {
+        const fallback = await this.settingsRepository.findFirst({
+          where: {
+            instanceId: instance.instanceId,
+          },
+        });
+
+        if (fallback?.typebotIdFallback) {
+          const findFallback = await this.botRepository.findFirst({
+            where: {
+              id: fallback.typebotIdFallback,
+            },
+          });
+
+          findBot = findFallback;
+        } else {
+          return;
+        }
+      }
+
+      const settings = await this.prismaRepository.typebotSetting.findFirst({
+        where: {
+          instanceId: instance.instanceId,
+        },
+      });
 
       const url = findBot?.url;
       const typebot = findBot?.typebot;
@@ -1006,32 +1024,19 @@ export class TypebotController extends ChatbotController implements ChatbotContr
       let stopBotFromMe = findBot?.stopBotFromMe;
       let keepOpen = findBot?.keepOpen;
       let debounceTime = findBot?.debounceTime;
+      let ignoreJids = findBot?.ignoreJids;
 
-      if (
-        !expire ||
-        !keywordFinish ||
-        !delayMessage ||
-        !unknownMessage ||
-        !listeningFromMe ||
-        !stopBotFromMe ||
-        !keepOpen
-      ) {
-        if (!expire) expire = settings.expire;
+      if (!expire) expire = settings.expire;
+      if (!keywordFinish) keywordFinish = settings.keywordFinish;
+      if (!delayMessage) delayMessage = settings.delayMessage;
+      if (!unknownMessage) unknownMessage = settings.unknownMessage;
+      if (!listeningFromMe) listeningFromMe = settings.listeningFromMe;
+      if (!stopBotFromMe) stopBotFromMe = settings.stopBotFromMe;
+      if (!keepOpen) keepOpen = settings.keepOpen;
+      if (!debounceTime) debounceTime = settings.debounceTime;
+      if (!ignoreJids) ignoreJids = settings.ignoreJids;
 
-        if (!keywordFinish) keywordFinish = settings.keywordFinish;
-
-        if (!delayMessage) delayMessage = settings.delayMessage;
-
-        if (!unknownMessage) unknownMessage = settings.unknownMessage;
-
-        if (!listeningFromMe) listeningFromMe = settings.listeningFromMe;
-
-        if (!stopBotFromMe) stopBotFromMe = settings.stopBotFromMe;
-
-        if (!keepOpen) keepOpen = settings.keepOpen;
-
-        if (!debounceTime) debounceTime = settings.debounceTime;
-      }
+      if (this.checkIgnoreJids(ignoreJids, remoteJid)) return;
 
       const key = msg.key as {
         id: string;

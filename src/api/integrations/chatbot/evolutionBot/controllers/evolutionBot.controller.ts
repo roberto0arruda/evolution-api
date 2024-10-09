@@ -698,7 +698,7 @@ export class EvolutionBotController extends ChatbotController implements Chatbot
 
       const content = getConversationMessage(msg);
 
-      const findBot = (await this.findBotTrigger(
+      let findBot = (await this.findBotTrigger(
         this.botRepository,
         this.settingsRepository,
         content,
@@ -706,19 +706,45 @@ export class EvolutionBotController extends ChatbotController implements Chatbot
         session,
       )) as EvolutionBot;
 
-      if (!findBot) return;
+      if (!findBot) {
+        const fallback = await this.settingsRepository.findFirst({
+          where: {
+            instanceId: instance.instanceId,
+          },
+        });
 
-      let listeningFromMe = findBot.listeningFromMe;
-      let stopBotFromMe = findBot.stopBotFromMe;
-      let debounceTime = findBot.debounceTime;
+        if (fallback?.botIdFallback) {
+          const findFallback = await this.botRepository.findFirst({
+            where: {
+              id: fallback.botIdFallback,
+            },
+          });
 
-      if (!listeningFromMe || !stopBotFromMe || !debounceTime) {
-        if (!listeningFromMe) listeningFromMe = settings.listeningFromMe;
-
-        if (!stopBotFromMe) stopBotFromMe = settings.stopBotFromMe;
-
-        if (!debounceTime) debounceTime = settings.debounceTime;
+          findBot = findFallback;
+        } else {
+          return;
+        }
       }
+
+      let expire = findBot?.expire;
+      let keywordFinish = findBot?.keywordFinish;
+      let delayMessage = findBot?.delayMessage;
+      let unknownMessage = findBot?.unknownMessage;
+      let listeningFromMe = findBot?.listeningFromMe;
+      let stopBotFromMe = findBot?.stopBotFromMe;
+      let keepOpen = findBot?.keepOpen;
+      let debounceTime = findBot?.debounceTime;
+      let ignoreJids = findBot?.ignoreJids;
+
+      if (!expire) expire = settings.expire;
+      if (!keywordFinish) keywordFinish = settings.keywordFinish;
+      if (!delayMessage) delayMessage = settings.delayMessage;
+      if (!unknownMessage) unknownMessage = settings.unknownMessage;
+      if (!listeningFromMe) listeningFromMe = settings.listeningFromMe;
+      if (!stopBotFromMe) stopBotFromMe = settings.stopBotFromMe;
+      if (!keepOpen) keepOpen = settings.keepOpen;
+      if (!debounceTime) debounceTime = settings.debounceTime;
+      if (!ignoreJids) ignoreJids = settings.ignoreJids;
 
       const key = msg.key as {
         id: string;
@@ -754,7 +780,18 @@ export class EvolutionBotController extends ChatbotController implements Chatbot
             remoteJid,
             findBot,
             session,
-            settings,
+            {
+              ...settings,
+              expire,
+              keywordFinish,
+              delayMessage,
+              unknownMessage,
+              listeningFromMe,
+              stopBotFromMe,
+              keepOpen,
+              debounceTime,
+              ignoreJids,
+            },
             debouncedContent,
             msg?.pushName,
           );
@@ -765,7 +802,18 @@ export class EvolutionBotController extends ChatbotController implements Chatbot
           remoteJid,
           findBot,
           session,
-          settings,
+          {
+            ...settings,
+            expire,
+            keywordFinish,
+            delayMessage,
+            unknownMessage,
+            listeningFromMe,
+            stopBotFromMe,
+            keepOpen,
+            debounceTime,
+            ignoreJids,
+          },
           content,
           msg?.pushName,
         );
